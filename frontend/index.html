@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Factory Automation Dashboard</title>
+    
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        /* --- CORE STYLES --- */
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .bg-circle { position: fixed; border-radius: 50%; filter: blur(80px); z-index: -1; }
+        .c1 { width: 400px; height: 400px; background: #ff00cc; top: -50px; left: -50px; opacity: 0.4; }
+        .c2 { width: 300px; height: 300px; background: #3333ff; bottom: -50px; right: -50px; opacity: 0.5; }
+
+        .container {
+            display: flex; gap: 30px; flex-wrap: wrap; justify-content: center;
+            padding: 40px 20px; z-index: 10; width: 100%; max-width: 1200px;
+        }
+
+        /* --- CARDS --- */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            border-radius: 24px;
+            padding: 25px;
+            width: 450px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+        .glass-card:hover { transform: translateY(-5px); }
+
+        h2 { 
+            margin: 0 0 20px 0; font-weight: 300; letter-spacing: 1px; 
+            border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px;
+            font-size: 1.8rem;
+        }
+
+        /* --- METRICS --- */
+        .metric-row {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.2); padding: 15px 20px;
+            margin-bottom: 15px; border-radius: 16px;
+            cursor: pointer; transition: background 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .metric-row:hover { background: rgba(255,255,255,0.15); }
+
+        .metric-info { text-align: left; display: flex; flex-direction: column; justify-content: center; }
+        .metric-label { font-size: 0.9rem; opacity: 0.8; margin-bottom: 4px; display: block; }
+        .metric-value { font-size: 1.5rem; font-weight: 600; letter-spacing: 0.5px; }
+        .mini-chart { width: 100px; height: 50px; }
+
+        .status {
+            padding: 10px; border-radius: 30px; font-size: 0.85rem; font-weight: bold;
+            background: rgba(46, 204, 113, 0.2); color: #4ade80; text-transform: uppercase;
+            border: 1px solid rgba(46, 204, 113, 0.3);
+            margin-top: 10px;
+        }
+        .critical .status { 
+            background: rgba(231, 76, 60, 0.2); color: #ff6b6b; 
+            border-color: rgba(231, 76, 60, 0.3); animation: pulse 1.5s infinite; 
+        }
+
+        /* --- FOCUS OVERLAY --- */
+        #focusOverlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.98); z-index: 9999;
+            flex-direction: column; align-items: center; justify-content: center;
+            padding: 40px; box-sizing: border-box;
+        }
+        #focusOverlay.active { display: flex; animation: fadeIn 0.25s ease-out; }
+
+        .focus-header { 
+            width: 100%; max-width: 1000px; display: flex; 
+            justify-content: space-between; align-items: center; margin-bottom: 20px;
+            flex-wrap: wrap; gap: 15px;
+        }
+        .focus-title { font-size: 2rem; color: white; font-weight: 300; margin: 0; }
+        
+        .controls { display: flex; gap: 10px; align-items: center; }
+
+        .range-select {
+            background: rgba(255, 255, 255, 0.1); color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3); padding: 10px 15px;
+            border-radius: 30px; font-size: 1rem; outline: none; cursor: pointer;
+        }
+        .range-select option { background: #1e3c72; color: white; }
+
+        .btn {
+            border: none; padding: 10px 20px; border-radius: 30px; 
+            font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.3s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        
+        .close-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); }
+        .close-btn:hover { background: white; color: #1e3c72; }
+
+        /* NEW: Download Button Style */
+        .download-btn { background: #38bdf8; color: #0f172a; }
+        .download-btn:hover { background: #7dd3fc; transform: scale(1.05); }
+
+        .focus-chart-container {
+            width: 100%; max-width: 1000px; height: 60vh;
+            background: rgba(255,255,255,0.03);
+            border-radius: 24px; padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+        }
+
+        /* --- MOBILE --- */
+        @media (max-width: 768px) {
+            .container { padding: 15px; gap: 15px; }
+            .glass-card { width: 100%; border-radius: 20px; padding: 20px; }
+            h2 { font-size: 1.5rem; text-align: left; }
+            .metric-row { padding: 12px 15px; }
+            
+            #focusOverlay { padding: 20px; justify-content: flex-start; padding-top: 40px; }
+            .focus-header { flex-direction: column; text-align: center; gap: 15px; }
+            .focus-title { font-size: 1.5rem; }
+            .controls { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+            .range-select { grid-column: 1 / -1; width: 100%; }
+            .btn { justify-content: center; width: 100%; }
+            .focus-chart-container { height: 50vh; padding: 10px; }
+        }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div class="bg-circle c1"></div>
+    <div class="bg-circle c2"></div>
+
+    <div class="container">
+        <div class="glass-card" id="card-Machine A">
+            <h2><i class="fas fa-robot"></i> Machine A</h2>
+            
+            <div class="metric-row" onclick="openFocus('Machine A', 'temperature', 'Temperature (°C)')">
+                <div class="metric-info">
+                    <span class="metric-label">Temperature</span>
+                    <span class="metric-value" id="val-temp-Machine A">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="mini-temp-Machine A"></canvas></div>
+            </div>
+
+            <div class="metric-row" onclick="openFocus('Machine A', 'current', 'Current (A)')">
+                <div class="metric-info">
+                    <span class="metric-label">Current</span>
+                    <span class="metric-value" id="val-curr-Machine A">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="mini-curr-Machine A"></canvas></div>
+            </div>
+
+            <div class="status" id="status-Machine A">Connecting...</div>
+        </div>
+
+        <div class="glass-card" id="card-Machine B">
+            <h2><i class="fas fa-cogs"></i> Machine B</h2>
+            
+            <div class="metric-row" onclick="openFocus('Machine B', 'temperature', 'Temperature (°C)')">
+                <div class="metric-info">
+                    <span class="metric-label">Temperature</span>
+                    <span class="metric-value" id="val-temp-Machine B">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="mini-temp-Machine B"></canvas></div>
+            </div>
+
+            <div class="metric-row" onclick="openFocus('Machine B', 'current', 'Current (A)')">
+                <div class="metric-info">
+                    <span class="metric-label">Current</span>
+                    <span class="metric-value" id="val-curr-Machine B">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="mini-curr-Machine B"></canvas></div>
+            </div>
+
+            <div class="status" id="status-Machine B">Connecting...</div>
+        </div>
+    </div>
+
+    <div id="focusOverlay">
+        <div class="focus-header">
+            <h1 class="focus-title" id="focusTitle">Machine Detail</h1>
+            
+            <div class="controls">
+                <select id="rangeSelect" class="range-select" onchange="updateFocusRange()">
+                    <option value="20">Live (Last 20)</option>
+                    <option value="60000">Last 1 Minute</option>
+                    <option value="300000">Last 5 Minutes</option>
+                    <option value="all">All History</option>
+                </select>
+                
+                <button class="btn download-btn" onclick="downloadReport()">
+                    <i class="fas fa-file-download"></i> Report
+                </button>
+                
+                <button class="btn close-btn" onclick="closeFocus()">Close</button>
+            </div>
+        </div>
+        <div class="focus-chart-container">
+            <canvas id="focusChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const socket = io('http://localhost:3000');
+        const LIMITS = { temperature: 90, current: 20.0 };
+        
+        // Data Stores
+        const historyData = { "Machine A": [], "Machine B": [] };
+        const MAX_HISTORY_POINTS = 500;
+
+        const miniCharts = {}; 
+        let focusChart = null; 
+        let currentFocus = { machine: null, metric: null };
+
+        // --- CHART CONFIGURATION ---
+        function createMiniChart(ctx, limitValue) {
+            return new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderWidth: 2, pointRadius: 0, fill: false, 
+                    segment: { borderColor: ctx => ctx.p0.parsed.y > limitValue || ctx.p1.parsed.y > limitValue ? '#ff6b6b' : '#4ade80' }
+                }]},
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                    scales: { x: { display: false }, y: { display: false } },
+                    animation: false,
+                    layout: { padding: 0 }
+                }
+            });
+        }
+
+        // Initialize Mini Charts
+        ['Machine A', 'Machine B'].forEach(machine => {
+            const tempCtx = document.getElementById(`mini-temp-${machine}`).getContext('2d');
+            const currCtx = document.getElementById(`mini-curr-${machine}`).getContext('2d');
+            
+            miniCharts[`${machine}_temp`] = createMiniChart(tempCtx, LIMITS.temperature);
+            miniCharts[`${machine}_curr`] = createMiniChart(currCtx, LIMITS.current);
+        });
+
+        // --- SOCKET LOGIC ---
+        socket.on('init_history', (history) => {
+            const now = Date.now();
+            Object.assign(historyData, history);
+            for (const [machine, data] of Object.entries(history)) {
+                data.forEach((point, index) => {
+                    if(!point.timestamp) point.timestamp = now - ((data.length - index) * 2000);
+                    updateUI(machine, point);
+                });
+            }
+        });
+
+        socket.on('update_data', (data) => {
+            data.timestamp = Date.now();
+            updateUI(data.machine_id, data);
+        });
+
+        function updateUI(machine, data) {
+            historyData[machine].push(data);
+            if(historyData[machine].length > MAX_HISTORY_POINTS) historyData[machine].shift();
+
+            updateDashboardText(machine, data.temperature, data.current);
+            
+            // Update Mini Charts
+            addChartData(miniCharts[`${machine}_temp`], data.time, data.temperature, 20);
+            addChartData(miniCharts[`${machine}_curr`], data.time, data.current, 20);
+
+            // Update Focus Chart if open
+            if (currentFocus.machine === machine && focusChart) {
+                updateFocusRange();
+            }
+        }
+
+        function updateDashboardText(machine, temp, curr) {
+            document.getElementById(`val-temp-${machine}`).innerText = temp + " °C";
+            document.getElementById(`val-curr-${machine}`).innerText = curr + " A";
+
+            const card = document.getElementById(`card-${machine}`);
+            const status = document.getElementById(`status-${machine}`);
+            
+            if (temp > LIMITS.temperature || curr > LIMITS.current) {
+                card.classList.add('critical');
+                status.innerHTML = "<i class='fas fa-exclamation-triangle'></i> Critical Alert";
+            } else {
+                card.classList.remove('critical');
+                status.innerHTML = "<i class='fas fa-check-circle'></i> Operational";
+            }
+        }
+
+        function addChartData(chart, label, value, maxPoints) {
+            chart.data.labels.push(label);
+            chart.data.datasets[0].data.push(value);
+            if (chart.data.labels.length > maxPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.update('none');
+        }
+
+        // --- FOCUS MODE LOGIC ---
+        function openFocus(machine, metric, title) {
+            currentFocus = { machine, metric };
+            
+            const overlay = document.getElementById('focusOverlay');
+            overlay.classList.add('active');
+            document.getElementById('focusTitle').innerText = `${machine} - ${title}`;
+            
+            document.getElementById('rangeSelect').value = "20";
+            renderFocusChart();
+        }
+
+        function updateFocusRange() {
+            if (!focusChart || !currentFocus.machine) return;
+            
+            const rangeValue = document.getElementById('rangeSelect').value;
+            const machineData = historyData[currentFocus.machine];
+            const metric = currentFocus.metric;
+
+            let filteredData = [];
+
+            if (rangeValue === 'all') {
+                filteredData = machineData;
+            } else if (rangeValue === '20') {
+                filteredData = machineData.slice(-20);
+            } else {
+                const ms = parseInt(rangeValue);
+                const cutoff = Date.now() - ms;
+                filteredData = machineData.filter(d => d.timestamp > cutoff);
+            }
+
+            focusChart.data.labels = filteredData.map(d => d.time);
+            focusChart.data.datasets[0].data = filteredData.map(d => d[metric]);
+            focusChart.update('none');
+        }
+
+        function renderFocusChart() {
+            if (focusChart) focusChart.destroy();
+
+            const ctx = document.getElementById('focusChart').getContext('2d');
+            const limit = LIMITS[currentFocus.metric];
+
+            focusChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: currentFocus.metric,
+                        data: [],
+                        borderWidth: 3,
+                        borderColor: '#38bdf8',
+                        backgroundColor: (context) => {
+                            const ctx = context.chart.ctx;
+                            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                            gradient.addColorStop(0, 'rgba(56, 189, 248, 0.5)');
+                            gradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
+                            return gradient;
+                        },
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        segment: {
+                            borderColor: ctx => ctx.p0.parsed.y > limit || ctx.p1.parsed.y > limit ? '#ff6b6b' : '#38bdf8'
+                        }
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: 'white' } },
+                        y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: 'white' } }
+                    },
+                    plugins: { legend: { display: false } },
+                    animation: false
+                }
+            });
+            updateFocusRange();
+        }
+
+        function closeFocus() {
+            document.getElementById('focusOverlay').classList.remove('active');
+            currentFocus = { machine: null, metric: null };
+            if (focusChart) {
+                focusChart.destroy();
+                focusChart = null;
+            }
+        }
+
+        // --- NEW: PDF REPORT GENERATION ---
+        async function downloadReport() {
+            if (!focusChart) return;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
+
+            // 1. Set Dark Background (matches theme #0f172a)
+            doc.setFillColor(15, 23, 42); 
+            doc.rect(0, 0, 297, 210, 'F'); 
+
+            // 2. Add Header Info (White Text)
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.text(`Automation Report: ${currentFocus.machine}`, 15, 20);
+            
+            doc.setFontSize(12);
+            doc.setTextColor(200, 200, 200);
+            doc.text(`Metric: ${currentFocus.metric.toUpperCase()}`, 15, 30);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 15, 36);
+            
+            // Add Limit Info
+            const limit = LIMITS[currentFocus.metric];
+            doc.text(`Safety Limit: ${limit}`, 200, 30);
+
+            // 3. Capture Chart Image
+            const canvas = document.getElementById('focusChart');
+            const imgData = canvas.toDataURL("image/png");
+
+            // 4. Add Image to PDF
+            // A4 landscape width is 297mm. We leave margins.
+            doc.addImage(imgData, 'PNG', 15, 45, 267, 130); 
+
+            // 5. Save
+            doc.save(`${currentFocus.machine}_${currentFocus.metric}_Report.pdf`);
+        }
+    </script>
+</body>
+</html>
