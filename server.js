@@ -56,6 +56,10 @@ app.post('/api/sensor-data', (req, res) => {
     res.sendStatus(200);
 });
 
+app.get('/check', (req, res) => {
+    res.status(200).send("Server is Running!");
+});
+
 io.on('connection', (socket) => {
     console.log('Client connected. Sending history...');
     socket.emit('init_history', machineHistory);
