@@ -1,0 +1,586 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Factory Automation | Neumorphism</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            /* --- LIGHT MODE DEFAULTS --- */
+            --bg-color: #e0e5ec;
+            --text-main: #4a5568;
+            --text-light: #a0aec0;
+            --highlight: #ffffff;
+            --shadow: #a3b1c6;
+            --primary: #3182ce;
+            --danger: #e53e3e;
+            --success: #38a169;
+            --chart-grid: rgba(0,0,0,0.05);
+            --toggle-bg: #cbd5e0;
+        }
+
+        /* --- DARK MODE OVERRIDES --- */
+        [data-theme="dark"] {
+            --bg-color: #212529;
+            --text-main: #e2e8f0;
+            --text-light: #718096;
+            --highlight: #2c3136;
+            --shadow: #16191c;
+            --chart-grid: rgba(255,255,255,0.05);
+            --toggle-bg: #4a5568;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Nunito', 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+        }
+
+        /* --- NEUMORPHIC UTILITIES --- */
+        .neu-out {
+            background: var(--bg-color);
+            box-shadow: 8px 8px 16px var(--shadow), 
+                        -8px -8px 16px var(--highlight);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .neu-in {
+            background: var(--bg-color);
+            box-shadow: inset 5px 5px 10px var(--shadow), 
+                        inset -5px -5px 10px var(--highlight);
+            border-radius: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .neu-btn {
+            border: none; outline: none; cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--primary); font-weight: 700;
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        
+        .neu-btn:active {
+            box-shadow: inset 3px 3px 6px var(--shadow), 
+                        inset -3px -3px 6px var(--highlight);
+            transform: translateY(1px);
+        }
+
+        /* --- HEADER --- */
+        header {
+            width: 100%; padding: 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            max-width: 1200px; flex-wrap: wrap; gap: 15px;
+        }
+
+        h1 {
+            margin: 0; font-size: 1.6rem;
+            color: var(--text-main);
+            text-shadow: 1px 1px 1px var(--highlight);
+        }
+
+        .header-controls { display: flex; gap: 15px; align-items: center; }
+
+        /* --- TOGGLE SWITCH --- */
+        .toggle-wrapper {
+            display: flex; align-items: center; gap: 8px;
+            font-weight: 600; font-size: 0.85rem; color: var(--text-main);
+        }
+        
+        .toggle-switch {
+            position: relative; width: 45px; height: 24px;
+            -webkit-appearance: none; appearance: none;
+            background: var(--bg-color);
+            outline: none; border-radius: 20px;
+            box-shadow: inset 3px 3px 5px var(--shadow), 
+                        inset -3px -3px 5px var(--highlight);
+            cursor: pointer; transition: 0.3s;
+        }
+
+        .toggle-switch::after {
+            content: ''; position: absolute;
+            top: 2px; left: 2px; width: 20px; height: 20px;
+            background: var(--toggle-bg);
+            border-radius: 50%;
+            box-shadow: 2px 2px 5px var(--shadow), -2px -2px 5px var(--highlight);
+            transition: 0.3s;
+        }
+
+        .toggle-switch:checked::after {
+            left: 23px;
+            background: var(--primary);
+        }
+
+        /* --- CONTAINER --- */
+        .container {
+            display: flex; gap: 30px; flex-wrap: wrap; justify-content: center;
+            padding: 20px 15px 40px 15px; width: 100%; max-width: 1200px;
+        }
+
+        /* --- CARDS --- */
+        .machine-card {
+            width: 100%; /* Full width on mobile */
+            max-width: 400px; /* Cap width on desktop */
+            padding: 25px;
+            display: flex; flex-direction: column; gap: 20px;
+        }
+
+        .machine-card h2 {
+            margin: 0; font-size: 1.4rem;
+            color: var(--text-main);
+            border-bottom: 2px solid var(--chart-grid);
+            padding-bottom: 15px;
+            display: flex; align-items: center; gap: 10px;
+        }
+
+        /* --- METRICS --- */
+        .metric-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px; cursor: pointer; transition: transform 0.2s;
+        }
+        .metric-row:active { transform: scale(0.98); }
+
+        .metric-info { display: flex; flex-direction: column; }
+        .metric-label { font-size: 0.8rem; color: var(--text-light); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+        .metric-value { font-size: 1.4rem; font-weight: 700; margin-top: 5px; }
+        .mini-chart { width: 90px; height: 45px; opacity: 0.9; }
+
+        /* --- STATUS --- */
+        .status-container {
+            display: flex; justify-content: center; align-items: center;
+            padding: 12px; font-weight: 700; font-size: 0.85rem;
+            text-transform: uppercase; letter-spacing: 1px;
+            color: var(--success);
+            text-align: center;
+        }
+        .machine-card.critical { border: 1px solid rgba(229, 62, 62, 0.3); }
+
+        /* --- OVERLAY --- */
+        #focusOverlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            z-index: 9999; justify-content: center; align-items: center; padding: 15px;
+        }
+        #focusOverlay.active { display: flex; animation: fadeUp 0.3s ease-out; }
+
+        .focus-modal {
+            width: 100%; max-width: 900px; padding: 30px;
+            display: flex; flex-direction: column; gap: 20px;
+            max-height: 90vh; overflow-y: auto; /* Scrollable on small landscape screens */
+        }
+
+        .focus-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
+        
+        .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+        .neu-select {
+            padding: 12px 20px; border: none; outline: none;
+            color: var(--text-main); font-weight: 600;
+            appearance: none; background: var(--bg-color);
+            box-shadow: 5px 5px 10px var(--shadow), -5px -5px 10px var(--highlight);
+            border-radius: 20px;
+            min-width: 150px;
+        }
+
+        .chart-box { height: 350px; padding: 15px; position: relative; width: 100%; }
+
+        .btn-download { color: var(--primary); padding: 12px 20px; border-radius: 20px; }
+        .btn-close { color: var(--danger); padding: 12px 20px; border-radius: 20px; }
+
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* --- MOBILE OPTIMIZATION --- */
+        @media (max-width: 600px) {
+            header {
+                flex-direction: column; align-items: flex-start;
+            }
+            .header-controls {
+                width: 100%; justify-content: space-between;
+                margin-top: 10px;
+            }
+            
+            .machine-card { padding: 20px; } /* Slightly less padding to save space */
+            
+            /* Modal Adjustments */
+            .focus-modal {
+                padding: 20px;
+                border-radius: 25px;
+            }
+            .focus-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            .controls {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr; /* 2 buttons side by side */
+                gap: 15px;
+            }
+            .neu-select {
+                grid-column: 1 / -1; /* Dropdown takes full width */
+                width: 100%;
+                text-align: center;
+            }
+            .chart-box {
+                height: 250px; /* Shorter chart on mobile to fit screen */
+                padding: 10px;
+            }
+            
+            /* Text Sizing */
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.3rem; }
+            .metric-value { font-size: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Factory<span style="font-weight: 300; color: var(--primary);">OS</span></h1>
+        
+        <div class="header-controls">
+            <div class="toggle-wrapper neu-btn" style="padding: 8px 15px; border-radius: 30px; cursor: default;">
+                <i class="fas fa-sun" style="color: var(--text-light)"></i>
+                <input type="checkbox" id="themeToggle" class="toggle-switch" onchange="toggleTheme()">
+                <i class="fas fa-moon" style="color: var(--text-light)"></i>
+            </div>
+
+            <div class="toggle-wrapper neu-btn" style="padding: 8px 15px; border-radius: 30px; cursor: default;">
+                <span style="font-size: 0.8rem;">Live</span>
+                <input type="checkbox" id="demoMode" class="toggle-switch" onchange="toggleDemoMode()">
+                <span style="font-size: 0.8rem;">Demo</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="machine-card neu-out" id="card-Machine A">
+            <h2><i class="fas fa-robot" style="color: var(--primary);"></i> Machine A</h2>
+            
+            <div class="metric-row neu-out" onclick="openFocus('Machine A', 'temperature', 'Temperature (°C)')">
+                <div class="metric-info">
+                    <span class="metric-label">Temperature</span>
+                    <span class="metric-value" id="val-temp-Machine A">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="mini-temp-Machine A"></canvas></div>
+            </div>
+
+            <div class="metric-row neu-out" onclick="openFocus('Machine A', 'current', 'Current (A)')">
+                <div class="metric-info">
+                    <span class="metric-label">Current</span>
+                    <span class="metric-value" id="val-curr-Machine A">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="mini-curr-Machine A"></canvas></div>
+            </div>
+
+            <div class="status-container neu-in" id="status-Machine A">
+                <i class="fas fa-wifi" style="margin-right:8px;"></i> Connecting...
+            </div>
+        </div>
+
+        <div class="machine-card neu-out" id="card-Machine B">
+            <h2><i class="fas fa-cogs" style="color: var(--primary);"></i> Machine B</h2>
+            
+            <div class="metric-row neu-out" onclick="openFocus('Machine B', 'temperature', 'Temperature (°C)')">
+                <div class="metric-info">
+                    <span class="metric-label">Temperature</span>
+                    <span class="metric-value" id="val-temp-Machine B">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="mini-temp-Machine B"></canvas></div>
+            </div>
+
+            <div class="metric-row neu-out" onclick="openFocus('Machine B', 'current', 'Current (A)')">
+                <div class="metric-info">
+                    <span class="metric-label">Current</span>
+                    <span class="metric-value" id="val-curr-Machine B">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="mini-curr-Machine B"></canvas></div>
+            </div>
+
+            <div class="status-container neu-in" id="status-Machine B">
+                <i class="fas fa-wifi" style="margin-right:8px;"></i> Connecting...
+            </div>
+        </div>
+    </div>
+
+    <div id="focusOverlay">
+        <div class="focus-modal neu-out">
+            <div class="focus-header">
+                <div>
+                    <h2 id="focusTitle" style="margin-bottom: 5px;">Machine Detail</h2>
+                    <span style="color: var(--text-light); font-size: 0.9rem;">Real-time Analytics</span>
+                </div>
+                
+                <div class="controls">
+                    <select id="rangeSelect" class="neu-select" onchange="updateFocusRange()">
+                        <option value="20">Live (Last 20)</option>
+                        <option value="60000">Last 1 Minute</option>
+                        <option value="300000">Last 5 Minutes</option>
+                        <option value="all">All History</option>
+                    </select>
+                    
+                    <button class="neu-btn neu-out btn-download" onclick="downloadReport()">
+                        <i class="fas fa-file-download"></i> PDF
+                    </button>
+                    
+                    <button class="neu-btn neu-out btn-close" onclick="closeFocus()">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+            
+            <div class="chart-box neu-in">
+                <canvas id="focusChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io('http://192.168.137.1:3000/');
+        const LIMITS = { temperature: 90, current: 20.0 };
+        const historyData = { "Machine A": [], "Machine B": [] };
+        const MAX_HISTORY_POINTS = 500;
+        const miniCharts = {}; 
+        let focusChart = null; 
+        let currentFocus = { machine: null, metric: null };
+        let demoInterval = null;
+
+        // --- 1. MEMORY & THEME INIT ---
+        (function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            const toggleBtn = document.getElementById('themeToggle');
+            if(toggleBtn) toggleBtn.checked = (savedTheme === 'dark');
+            const isDark = (savedTheme === 'dark');
+            Chart.defaults.color = isDark ? '#e2e8f0' : '#4a5568';
+            Chart.defaults.borderColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+            Chart.defaults.font.family = "'Nunito', sans-serif";
+        })();
+
+        // --- 2. TOGGLE FUNCTION ---
+        function toggleTheme() {
+            const isDark = document.getElementById('themeToggle').checked;
+            const newTheme = isDark ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            const newTextColor = isDark ? '#e2e8f0' : '#4a5568';
+            const newGridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+            Chart.defaults.color = newTextColor;
+            Chart.defaults.borderColor = newGridColor;
+            Object.values(miniCharts).forEach(chart => chart.update('none'));
+            if(focusChart) {
+                focusChart.data.datasets[0].pointBackgroundColor = isDark ? '#212529' : '#e0e5ec';
+                focusChart.options.scales.y.grid.color = newGridColor;
+                focusChart.update('none');
+            }
+        }
+
+        // --- CHART CREATION ---
+        function createMiniChart(ctx, limitValue) {
+            return new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderWidth: 2, pointRadius: 0, fill: false, 
+                    tension: 0.4,
+                    segment: { borderColor: ctx => ctx.p0.parsed.y > limitValue || ctx.p1.parsed.y > limitValue ? '#e53e3e' : '#3182ce' }
+                }]},
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                    scales: { x: { display: false }, y: { display: false } },
+                    animation: false
+                }
+            });
+        }
+
+        ['Machine A', 'Machine B'].forEach(machine => {
+            const tempCtx = document.getElementById(`mini-temp-${machine}`).getContext('2d');
+            const currCtx = document.getElementById(`mini-curr-${machine}`).getContext('2d');
+            miniCharts[`${machine}_temp`] = createMiniChart(tempCtx, LIMITS.temperature);
+            miniCharts[`${machine}_curr`] = createMiniChart(currCtx, LIMITS.current);
+        });
+
+        // --- DATA HANDLING ---
+        socket.on('init_history', (history) => {
+            if (document.getElementById('demoMode').checked) return;
+            const now = Date.now();
+            Object.assign(historyData, history);
+            for (const [machine, data] of Object.entries(history)) {
+                data.forEach((point, index) => {
+                    if(!point.timestamp) point.timestamp = now - ((data.length - index) * 2000);
+                    updateUI(machine, point);
+                });
+            }
+        });
+
+        socket.on('update_data', (data) => {
+            if (document.getElementById('demoMode').checked) return;
+            data.timestamp = Date.now();
+            updateUI(data.machine_id, data);
+        });
+
+        function toggleDemoMode() {
+            const isDemo = document.getElementById('demoMode').checked;
+            if (isDemo) {
+                historyData["Machine A"] = [];
+                historyData["Machine B"] = [];
+                demoInterval = setInterval(() => {
+                    ['Machine A', 'Machine B'].forEach(m => {
+                        const fakeData = {
+                            machine_id: m,
+                            temperature: (Math.random() * (95 - 60) + 60).toFixed(1),
+                            current: (Math.random() * (22 - 12) + 12).toFixed(2),
+                            time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                            timestamp: Date.now()
+                        };
+                        updateUI(m, fakeData);
+                    });
+                }, 2000);
+            } else {
+                clearInterval(demoInterval);
+                location.reload();
+            }
+        }
+
+        function updateUI(machine, data) {
+            historyData[machine].push(data);
+            if(historyData[machine].length > MAX_HISTORY_POINTS) historyData[machine].shift();
+            
+            document.getElementById(`val-temp-${machine}`).innerText = data.temperature + " °C";
+            document.getElementById(`val-curr-${machine}`).innerText = data.current + " A";
+
+            const card = document.getElementById(`card-${machine}`);
+            const status = document.getElementById(`status-${machine}`);
+            
+            if (data.temperature > LIMITS.temperature || data.current > LIMITS.current) {
+                card.classList.add('critical');
+                status.innerHTML = "<i class='fas fa-exclamation-circle' style='margin-right:8px'></i> CRITICAL ALERT";
+                status.style.color = "#e53e3e";
+            } else {
+                card.classList.remove('critical');
+                status.innerHTML = "<i class='fas fa-check-circle' style='margin-right:8px'></i> OPERATIONAL";
+                status.style.color = "#38a169";
+            }
+
+            addChartData(miniCharts[`${machine}_temp`], data.time, data.temperature, 20);
+            addChartData(miniCharts[`${machine}_curr`], data.time, data.current, 20);
+
+            if (currentFocus.machine === machine && focusChart) updateFocusRange();
+        }
+
+        function addChartData(chart, label, value, maxPoints) {
+            chart.data.labels.push(label);
+            chart.data.datasets[0].data.push(value);
+            if (chart.data.labels.length > maxPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.update('none');
+        }
+
+        // --- FOCUS MODAL ---
+        function openFocus(machine, metric, title) {
+            currentFocus = { machine, metric };
+            document.getElementById('focusOverlay').classList.add('active');
+            document.getElementById('focusTitle').innerText = `${machine} - ${title}`;
+            renderFocusChart();
+        }
+
+        function closeFocus() {
+            document.getElementById('focusOverlay').classList.remove('active');
+            currentFocus = { machine: null, metric: null };
+            if (focusChart) { focusChart.destroy(); focusChart = null; }
+        }
+
+        function updateFocusRange() {
+            if (!focusChart || !currentFocus.machine) return;
+            const range = document.getElementById('rangeSelect').value;
+            const data = historyData[currentFocus.machine];
+            const metric = currentFocus.metric;
+            
+            let filtered = (range === 'all') ? data : 
+                           (range === '20') ? data.slice(-20) : 
+                           data.filter(d => d.timestamp > Date.now() - parseInt(range));
+
+            focusChart.data.labels = filtered.map(d => d.time);
+            focusChart.data.datasets[0].data = filtered.map(d => d[metric]);
+            focusChart.update('none');
+        }
+
+        function renderFocusChart() {
+            if (focusChart) focusChart.destroy();
+            const ctx = document.getElementById('focusChart').getContext('2d');
+            const limit = LIMITS[currentFocus.metric];
+            const isDark = document.getElementById('themeToggle').checked;
+
+            focusChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{
+                        label: currentFocus.metric,
+                        data: [],
+                        borderWidth: 3,
+                        borderColor: '#3182ce',
+                        backgroundColor: 'rgba(49, 130, 206, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointBackgroundColor: isDark ? '#212529' : '#e0e5ec',
+                        segment: { borderColor: ctx => ctx.p0.parsed.y > limit || ctx.p1.parsed.y > limit ? '#e53e3e' : '#3182ce' }
+                }]},
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' } }
+                    },
+                    plugins: { legend: { display: false } },
+                    animation: false
+                }
+            });
+            updateFocusRange();
+        }
+
+        // --- PDF GENERATION ---
+        async function downloadReport() {
+            if (!focusChart) return;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4');
+            doc.setFillColor(224, 229, 236); 
+            doc.rect(0, 0, 297, 210, 'F'); 
+            doc.setTextColor(74, 85, 104);
+            doc.setFontSize(22);
+            doc.text(`Report: ${currentFocus.machine}`, 15, 20);
+            doc.setFontSize(12);
+            doc.setTextColor(113, 128, 150);
+            doc.text(`Metric: ${currentFocus.metric.toUpperCase()}`, 15, 30);
+            doc.text(`Time: ${new Date().toLocaleString()}`, 15, 36);
+            const canvas = document.getElementById('focusChart');
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tCtx = tempCanvas.getContext('2d');
+            const isDark = document.getElementById('themeToggle').checked;
+            tCtx.fillStyle = isDark ? '#212529' : '#e0e5ec';
+            tCtx.fillRect(0,0,tempCanvas.width, tempCanvas.height);
+            tCtx.drawImage(canvas, 0, 0);
+            doc.addImage(tempCanvas.toDataURL("image/jpeg"), 'JPEG', 15, 45, 267, 130); 
+            doc.save(`${currentFocus.machine}_Report.pdf`);
+        }
+    </script>
+</body>
+</html>

@@ -3,7 +3,7 @@ import random
 import time
 
 # Configuration
-SERVER_URL = "https://guna-factory-automation.vercel.app/api/sensor-data"
+SERVER_URL = "http://192.168.137.1:3000/api/sensor-data"
 MACHINES = ["Machine A", "Machine B"]
 
 def generate_data():
