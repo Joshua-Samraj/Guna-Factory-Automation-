@@ -409,8 +409,8 @@
     </div>
 
     <script>
-        const socket = io('http://192.168.137.1:3000');
-        // const socket = io('https://guna-factory-automation.vercel.app');
+        // const socket = io('http://192.168.137.1:3000');
+        const socket = io('https://guna-factory-automation.vercel.app');
         const LIMITS = { temperature: 36, current: 4.0 };
         const historyData = { "Machine A": [], "Machine B": [] };
         const MAX_HISTORY_POINTS = 500;
