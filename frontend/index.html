@@ -12,12 +12,8 @@
 
     <style>
         :root {
-            --metal-light: #5a5a5a;
-            --metal-dark: #2b2b2b;
-            --lcd-off: #1a221a;
             --lcd-on: #39ff14;
             --lcd-red: #ff3333;
-            --screw: #111;
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -89,7 +85,6 @@
         
         .toggle-switch:checked::after { left: 36px; }
 
-        /* Power Switch Override styles */
         .power-control-wrapper {
             display: flex; justify-content: space-between; align-items: center; 
             margin-bottom: 20px; padding: 12px 15px; 
@@ -311,7 +306,7 @@
             <div class="power-control-wrapper">
                 <span class="power-label">WEB OVERRIDE</span>
                 <label class="pwr-switch">
-                    <input type="checkbox" id="pwr-Machine A" checked onchange="togglePower('Machine A')">
+                    <input type="checkbox" id="pwr-MachineA" checked onchange="togglePower('Machine A', this.checked)">
                     <span class="pwr-slider"></span>
                 </label>
             </div>
@@ -344,7 +339,7 @@
             <div class="power-control-wrapper">
                 <span class="power-label">WEB OVERRIDE</span>
                 <label class="pwr-switch">
-                    <input type="checkbox" id="pwr-Machine B" checked onchange="togglePower('Machine B')">
+                    <input type="checkbox" id="pwr-MachineB" checked onchange="togglePower('Machine B', this.checked)">
                     <span class="pwr-slider"></span>
                 </label>
             </div>
@@ -409,7 +404,6 @@
     </div>
 
     <script>
-        // const socket = io('http://192.168.137.1:3000');
         const socket = io('https://guna-factory-automation.vercel.app');
         const LIMITS = { temperature: 36, current: 4.0 };
         const historyData = { "Machine A": [], "Machine B": [] };
@@ -470,14 +464,18 @@
 
         socket.on('relay_state_update', (state) => {
             if (document.getElementById('demoMode').checked) return;
-            const btnA = document.getElementById('pwr-Machine A');
-            const btnB = document.getElementById('pwr-Machine B');
-            if (btnA) btnA.checked = state["Machine A"];
-            if (btnB) btnB.checked = state["Machine B"];
+            const btnA = document.getElementById('pwr-MachineA');
+            const btnB = document.getElementById('pwr-MachineB');
+            
+            if (btnA && btnA.checked !== state["Machine A"]) {
+                btnA.checked = state["Machine A"];
+            }
+            if (btnB && btnB.checked !== state["Machine B"]) {
+                btnB.checked = state["Machine B"];
+            }
         });
 
-        function togglePower(machine) {
-            const isChecked = document.getElementById(`pwr-${machine}`).checked;
+        function togglePower(machine, isChecked) {
             socket.emit('toggle_relay', { machine_id: machine, state: isChecked });
         }
 
