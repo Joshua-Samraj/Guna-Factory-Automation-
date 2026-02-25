@@ -14,16 +14,19 @@ const PORT = 3000;
 const EMAIL_USER = "j.joshuasamraj@gmail.com";
 const EMAIL_PASS = "gcdw zhyw ljiy wtkk"; 
 
-// Threshold Limits
 const LIMITS = {
     temperature: 36.0,
     current: 4.0 
 };
 
-// Data Store for History
 const machineHistory = {
     "Machine A": [],
     "Machine B": []
+};
+
+let manualState = {
+    "Machine A": true,
+    "Machine B": true
 };
 
 const alertCooldowns = {}; 
@@ -33,31 +36,23 @@ const transporter = nodemailer.createTransport({
     auth: { user: EMAIL_USER, pass: EMAIL_PASS }
 });
 
-// ============================================================
-//  API ROUTE: THIS IS WHERE WE RECEIVE & PRINT DATA
-// ============================================================
 app.post('/api/sensor-data', (req, res) => {
     const { machine_id, temperature, current } = req.body;
     
-    // --- NEW LINE: Print the data to the Console ---
     console.log(`📥 RECEIVED: [${machine_id}] Temp: ${temperature}°C | Current: ${current}A`);
-    // -----------------------------------------------
 
     const timestamp = new Date().toLocaleTimeString();
     const dataPoint = { time: timestamp, temperature, current };
 
-    // 1. Update History
     if (!machineHistory[machine_id]) machineHistory[machine_id] = [];
     machineHistory[machine_id].push(dataPoint);
     if (machineHistory[machine_id].length > 50) machineHistory[machine_id].shift();
 
-    // 2. Real-time Push
     io.emit('update_data', { machine_id, ...dataPoint });
 
-    // 3. Alerts
     checkLimitsAndAlert(machine_id, temperature, current);
 
-    res.sendStatus(200);
+    res.json(manualState);
 });
 
 app.get('/check', (req, res) => {
@@ -65,11 +60,18 @@ app.get('/check', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-    console.log('Client connected. Sending history...');
+    console.log('Client connected. Sending history and relay states...');
     socket.emit('init_history', machineHistory);
-});
+    socket.emit('relay_state_update', manualState);
 
-// --- ALERT LOGIC ---
+    socket.on('toggle_relay', (data) => {
+        if (manualState[data.machine_id] !== undefined) {
+            manualState[data.machine_id] = data.state;
+            io.emit('relay_state_update', manualState);
+            console.log(`🔌 WEB OVERRIDE: ${data.machine_id} set to ${data.state ? 'ON' : 'OFF'}`);
+        }
+    });
+});
 
 function checkLimitsAndAlert(machine, temp, curr) {
     const isTempHigh = temp > LIMITS.temperature;
@@ -78,7 +80,7 @@ function checkLimitsAndAlert(machine, temp, curr) {
     if (isTempHigh || isCurrHigh) {
         const now = Date.now();
         if (!alertCooldowns[machine] || now - alertCooldowns[machine] > 60000) {
-            console.log(`⚠️ ALERT TRIGGERED for ${machine}! Sending Email...`); // Added Log for Alert
+            console.log(`⚠️ ALERT TRIGGERED for ${machine}! Sending Email...`);
             sendEmailAlert(machine, temp, curr, isTempHigh, isCurrHigh);
             alertCooldowns[machine] = now;
         }
