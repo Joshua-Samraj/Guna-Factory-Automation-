@@ -7,7 +7,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
 
-app.use(cors());
+app.use(cors());    
 app.use(express.json());
 
 const PORT = 3000;
@@ -16,8 +16,8 @@ const EMAIL_PASS = "gcdw zhyw ljiy wtkk";
 
 // Threshold Limits
 const LIMITS = {
-    temperature: 90.0,
-    current: 22.0 
+    temperature: 36.0,
+    current: 4.0 
 };
 
 // Data Store for History
